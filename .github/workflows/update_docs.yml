@@ -1,0 +1,33 @@
+name: Daily Decision Collector
+
+on:
+  schedule:
+    - cron: '0 15 * * *' # 한국 시간 00:00 (UTC 15:00)
+  workflow_dispatch:
+
+jobs:
+  collect:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.9'
+
+      - name: Install dependencies
+        run: |
+          pip install requests beautifulsoup4
+
+      - name: Run Collector
+        run: python collector.py
+
+      - name: Commit and Push changes
+        run: |
+          git config --global user.name 'github-actions'
+          git config --global user.email 'github-actions@github.com'
+          git add docs/*.pdf
+          git diff --quiet && git diff --staged --quiet || (git commit -m "Auto-collect new decisions" && git push)
