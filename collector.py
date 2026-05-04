@@ -1,59 +1,70 @@
 import os
-import requests
-from bs4 import BeautifulSoup
 import time
+from selenium import webdriver
+from selenium.webdriver.chrome.service import Service
+from selenium.webdriver.chrome.options import Options
+from webdriver_manager.chrome import ChromeDriverManager
+import requests
 
 def download_decisions(limit=10):
-    base_url = "https://www.pipc.go.kr/np/cop/bbs/selectBoardList.do?bbsId=BS074"
-    download_prefix = "https://www.pipc.go.kr"
     save_dir = "./docs"
+    if not os.path.exists(save_dir): os.makedirs(save_dir)
+
+    # 1. 크롬 브라우저 설정 (창이 안 뜨는 headless 모드)
+    chrome_options = Options()
+    chrome_options.add_argument("--headless")
+    chrome_options.add_argument("--no-sandbox")
+    chrome_options.add_argument("--disable-dev-shm-usage")
+    chrome_options.add_argument("user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36")
+
+    driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=chrome_options)
     
-    if not os.path.exists(save_dir):
-        os.makedirs(save_dir)
+    try:
+        # 2. 게시판 접속
+        print("게시판 접속 중...")
+        driver.get("https://www.pipc.go.kr/np/cop/bbs/selectBoardList.do?bbsId=BS074")
+        time.sleep(5) # 충분히 대기
 
-    headers = {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36'
-    }
-
-    # 현재 docs 폴더에 있는 파일 목록 확인 (중복 방지)
-    existing_files = os.listdir(save_dir)
-    downloaded_count = 0
-
-    # 게시판 첫 페이지 접속
-    res = requests.get(base_url, headers=headers)
-    res.encoding = 'utf-8'
-    soup = BeautifulSoup(res.text, 'html.parser')
-
-    # 게시글 목록 찾기 (보안뉴스 때와 유사하게 구조 파악 필요)
-    # 위원회 사이트 구조에 맞춰 tr 또는 td 선택자를 조정합니다.
-    rows = soup.select('table.board_list tbody tr')
-
-    for row in rows:
-        if downloaded_count >= limit:
-            break
-
-        # 파일 다운로드 링크 찾기
-        link_elem = row.select_one('a[href*="fileDown"]')
-        if not link_elem: continue
-
-        title = row.select_one('td.subject').get_text(strip=True).replace("/", "_")
-        file_url = download_prefix + link_elem['href']
-        file_name = f"{title}.pdf"
-
-        # 이미 있으면 건너뜀
-        if file_name in existing_files:
-            continue
-
-        # 다운로드 실행
-        print(f"다운로드 중: {file_name}")
-        file_res = requests.get(file_url, headers=headers)
-        with open(os.path.join(save_dir, file_name), 'wb') as f:
-            f.write(file_res.content)
+        # 3. 게시글 찾기
+        links = driver.find_elements("css selector", "td.subject a")
+        downloaded = 0
         
-        downloaded_count += 1
-        time.sleep(2) # 사이트 부하 방지를 위한 매너 타임
+        # 상세 페이지 링크 미리 수집
+        detail_urls = [link.get_attribute('href') for link in links[:20]]
 
-    print(f"총 {downloaded_count}개의 새로운 결정문을 가져왔습니다.")
+        for url in detail_urls:
+            if downloaded >= limit: break
+            
+            driver.get(url)
+            time.sleep(3)
+            
+            # 4. 파일 다운로드 버튼 클릭 시도 또는 URL 추출
+            try:
+                file_link = driver.find_element("xpath", "//a[contains(@href, 'fileDown.do')]")
+                file_url = file_link.get_attribute('href')
+                file_name = driver.find_element("css selector", "div.file_list li a").text.strip()
+                
+                if file_name in os.listdir(save_dir):
+                    print(f"이미 존재: {file_name}")
+                    continue
+
+                print(f"다운로드 시작: {file_name}")
+                # 세션 유지를 위해 브라우저 쿠키를 가지고 다운로드
+                cookies = driver.get_cookies()
+                s = requests.Session()
+                for cookie in cookies:
+                    s.cookies.set(cookie['name'], cookie['value'])
+                
+                res = s.get(file_url)
+                with open(os.path.join(save_dir, file_name), 'wb') as f:
+                    f.write(res.content)
+                
+                downloaded += 1
+            except:
+                continue
+
+    finally:
+        driver.quit()
 
 if __name__ == "__main__":
     download_decisions(limit=10)
