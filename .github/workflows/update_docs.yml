@@ -20,7 +20,13 @@ jobs:
 
       - name: Install dependencies
         run: |
-          pip install requests beautifulsoup4
+          pip install selenium webdriver-manager requests beautifulsoup4
+
+      # --- 2번: 이 부분이 추가된 핵심입니다! ---
+      - name: Install Google Chrome
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y google-chrome-stable
 
       - name: Run Collector
         run: python collector.py
