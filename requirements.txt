@@ -1,0 +1,7 @@
+langchain
+langchain-openai
+pypdf
+faiss-cpu
+tiktoken
+beautifulsoup4
+requests
