@@ -3,14 +3,4 @@ langchain-openai
 pypdf
 faiss-cpu
 tiktoken
-beautifulsoup4
-requests
-selenium
-webdriver-manager
-beautifulsoup4
 PyGithub
-langchain
-langchain-openai
-pypdf
-faiss-cpu
-tiktoken
